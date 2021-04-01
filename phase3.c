@@ -1,25 +1,83 @@
+/* ------------------------------------------------------------------------
+   phase3.c
+
+   University of Arizona South
+   Computer Science 452
+
+   @authors: Erik Ibarra Hurtado, Hassan Martinez, Victor Alvarez
+
+   ------------------------------------------------------------------------ */
+
 #include <usloss.h>
 #include <phase1.h>
 #include <phase2.h>
 #include <phase3.h>
+#include <usyscall.h>
+#include <libuser.h>
+#include "sems.h"
 
-int start2(char *); 
-int  spawn_real(char *name, int (*func)(char *), char *arg,
-                int stack_size, int priority);
-int  wait_real(int *status);
-int
-start2(char *arg)
+#include <stdio.h>
+#include <stdlib.h>
+#include <strings.h>
+#include <string.h>
+#include <time.h>
+
+/* ------------------------- Prototypes ----------------------------------- */
+
+int     start2(char *); 
+int     spawn_real(char *name, int (*func)(char *), char *arg, int stack_size, int priority);
+int     wait_real(int *status);
+
+/* -------------------------- Globals ------------------------------------- */
+
+int debugflag3 = 0;
+pcb_ptr ProcessTable3[MAXPROC];
+pcb_ptr empty_pcb = {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+
+/* -------------------------- Functions ----------------------------------- */
+/* ------------------------------------------------------------------------
+   Name - start2
+   Purpose - Initializes start3 process in user mode.
+             Start the phase3 test process.
+   ----------------------------------------------------------------------- */
+int start2(char *arg)
 {
     int		pid;
     int		status;
+
     /*
      * Check kernel mode here.
      */
 
+    if ((psr_get() & PSR_CURRENT_MODE) == 0)
+    {
+        console("start2(): Not in kernel mode\n");
+        halt(1);
+    }
+    
     /*
-     * Data structure initialization as needed...
+     * Data structure initialization as needed.
      */
 
+    /* Setting process table. */ 
+    for (int i = 0; i < MAXPROC; i++)
+    {
+        ProcessTable3[i] = empty_pcb;
+    }
+
+    /* Setting system call handlers. */
+    for (int i = 0; i < MAXSYSCALLS; i++)
+    {
+        sys_vec[i] = nullsys3;
+    }
+
+    /* Setting handlers functions. */
+    sys_vec[SYS_SPAWN] = spawn; 
+    sys_vec[SYS_WAIT] = wait; 
+    sys_vec[SYS_TERMINATE] = terminate; 
+    sys_vec[SYS_GETTIMEOFDAY] = getTimeOfDay;
+    sys_vec[SYS_CPUTIME] = cpuTime;
+    sys_vec[SYS_GETPID] = getPID;
 
     /*
      * Create first user-level process and wait for it to finish.
@@ -49,8 +107,15 @@ start2(char *arg)
      * values back into the sysargs pointer, switch to user-mode, and 
      * return to the user code that called Spawn.
      */
+
     pid = spawn_real("start3", start3, NULL, 4*USLOSS_MIN_STACK, 3);
+
     pid = wait_real(&status);
 
+    if (DEBUG2 && debugflag3)
+    {
+        console ("start2(): Calling quit(0)\n");
+    }
+    quit(0);
 } /* start2 */
 
