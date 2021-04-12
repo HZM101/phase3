@@ -24,9 +24,22 @@
 
 /* ------------------------- Prototypes ----------------------------------- */
 
-int     start2(char *); 
-int     spawn_real(char *name, int (*func)(char *), char *arg, int stack_size, int priority);
-int     wait_real(int *status);
+int         start2(char *); 
+extern int  start3(char *);
+
+void        spawn(sysargs *);
+int         spawn_launch(char *);
+int         spawn_real(char *name, int (*func)(char *), char *arg, int stack_size, int priority);
+void        wait(sysargs *);
+int         wait_real(int *);
+void        terminate(sysargs *);      
+int         terminate_real(int);
+void        cputime(sysargs *);
+void        gettimeofday(sysargs *);
+void        getPID(sysargs *);
+void        nullsys3(sysargs *);
+int         insertChild(int, int);
+int         removeChild(int);       
 
 /* -------------------------- Globals ------------------------------------- */
 
@@ -119,3 +132,113 @@ int start2(char *arg)
     quit(0);
 } /* start2 */
 
+
+
+
+
+
+
+
+
+
+
+
+
+/* cputime */
+static void cputime(sysargs *args_ptr)
+{
+
+    *((int*)(args_ptr->arg1)) = readtime();
+
+} /* cputime */
+
+
+/* gettimeofday */
+void gettimeofday(sysargs *)
+{
+
+    *((int*)(args_ptr->arg1)) = sys_clock();
+
+} /* gettimeofday */
+
+
+/* getPID */
+void getPID(sysargs *args_ptr)
+{
+
+    *((int*)(args_ptr->arg1)) = getpid();
+
+} /* getPID */
+
+
+/* nullsys3 */
+void nullsys3(sysargs *args_ptr)
+{
+   printf("nullsys3(): Invalid syscall %d\n", args_ptr->number);
+   printf("nullsys3(): process %d terminating\n", getpid());
+   terminate_real(1);
+} /* nullsys3 */
+
+
+/* insertChild */
+int insertChild(int child_location, int parent_location)
+{
+
+    /* Family tree (walker) if their is no empty space for child. Child set to 0. */
+    int num_children = 0;
+    pcb_ptr walker;
+
+    /* Check for empty space. */
+    if (ProcessTable3[parent_location].child_ptr == NULL)
+    {
+        ProcessTable3[parent_location].child_ptr = &ProcessTable3[child_location];
+        num_children++;
+    }
+    /* If no empty space then their. */
+    else
+    {
+        num_children = 1;
+
+        /* Walker point to first child. */
+        walker = ProcessTable3[parent_location].child_ptr;
+
+        /* Looping around the sibling. */
+        while (walker->sibling_ptr != NULL)
+        {
+            walker = walker->sibling_ptr;
+            num_children++;
+        }
+
+        /* Set sibling to empty NULL from looping. */
+        walker->sibling_ptr = &ProcessTable3[child_location];
+        num_children++;
+    }
+    
+    return num_children;
+} /* insertChild */
+
+
+/* removeChild */
+int removeChild(int parent_location)
+{
+    pcb_ptr walker;
+
+    /* Check for child if 0 then their is no child to remove. */
+    if (ProcessTable3[parent_location].num_children == 0)
+    {
+        return ProcessTable3[parent_location].num_children;
+    }
+    else
+    {
+        walker = ProcessTable3[parent_location].child_ptr;
+
+        /* Point to sibling. */
+        ProcessTable3[parent_location].child_ptr = ProcessTable3[parent_location].child_ptr->sibling_ptr;
+
+        /* Removing child. */
+        ProcessTable3[parent_location].num_children--;
+        walker->sibling_ptr = NULL;
+    }
+    
+    return ProcessTable3[parent_location].num_children;
+} /* removeChild */
