@@ -11,12 +11,15 @@
 	} \
 }
 
+typedef struct pcb pcb;
+typedef struct pcb *pcb_ptr;
+
 /* Process Control Block */
 struct pcb_ptr {
     int pid;
     char *name;
     int status;
-    int num_of_children;
+    int num_children;
     pcb_ptr parent_ptr;
     pcb_ptr child_ptr;
     pcb_ptr sibling_ptr;

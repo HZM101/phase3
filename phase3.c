@@ -38,6 +38,8 @@ void        cputime(sysargs *);
 void        gettimeofday(sysargs *);
 void        getPID(sysargs *);
 void        nullsys3(sysargs *);
+void        check_kernel_mode();
+void        set_user_mode();
 int         insertChild(int, int);
 int         removeChild(int);       
 
@@ -62,11 +64,7 @@ int start2(char *arg)
      * Check kernel mode here.
      */
 
-    if ((psr_get() & PSR_CURRENT_MODE) == 0)
-    {
-        console("start2(): Not in kernel mode\n");
-        halt(1);
-    }
+    check_kernel_mode();
     
     /*
      * Data structure initialization as needed.
@@ -135,13 +133,99 @@ int start2(char *arg)
 
 
 
+/* wait */
+void wait(sysargs *args_ptr)
+{
+    check_kernel_mode();
+    int *status = args_ptr->arg2;
+    int pid = wait_real(status);
+
+    if (debugflag3) 
+    {
+        console("wait(): joined with child pid: %d, stauts: %d\n", pid, *status);
+    }
+
+    args_ptr->arg1 = (void *) ((long) pid);
+    args_ptr->arg2 = (void *) ((long) *status);
+    args_ptr->arg4 = (void *) ((long) 0);
+
+    /* Terminate process if zapped. */
+    if (is_zapped()) 
+    {
+        terminate_real(1);
+    } else 
+    {
+        init_user_mode();
+    }
+
+} /* wait */
 
 
+/* wait_real */
+int wait_real(int *status)
+{
+    check_kernel_mode();
+    if (debugflag3) 
+    {
+        console("wait_real(): reached wait_real\n");
+        int pid = join(status);
+        return pid;
+    }
+} /* wait_real */
 
 
+/* terminate */
+void terminate(sysargs *args_ptr)
+{
+    check_kernel_mode();
+    int status = (int) ((long) args_ptr->arg1);
+    terminate_real(status);
+    set_user_mode();
+} /* terminate */
 
 
+/* terminate_real */
+int terminate_real(int status)
+{
+    check_kernel_mode();
+    int walker = getpid() % MAXPROC;
+    int parent_location;
+    int result;
 
+    /* Set the parent location. */
+    parent_location = ProcessTable3[walker].parent_ptr->pid % MAXPROC;
+    
+    /* If their is no child to terminate remove parent. */
+    if (ProcessTable3[walker].num_children == 0)
+    {
+        if(ProcessTable3[parent_location].status == ITEM_WAITING)
+        {
+
+            removeChild(ProcessTable3[walker].parent_ptr->pid);
+            result = MboxSend(ProcessTable3[parent_location].start_mbox, &status, sizeof(int));
+        }
+        else
+        {
+            removeChild(ProcessTable3[walker].parent_ptr->pid);
+        }
+        quit(0);
+    }
+
+    /* Zapping each child. */
+    while (ProcessTable3[walker].num_children != 0)
+    {
+        result = zap(ProcessTable3[walker].child_ptr->pid);
+        result = removeChild(walker);
+    }
+
+    /* User-level process for quit(0). */
+    removeChild(ProcessTable3[parent_location].pid);
+    result = MboxSend(ProcessTable3[parent_location].start_mbox, &status, sizeof(int));
+    quit(0);
+
+    return 0;
+
+} /* terminate_real */
 
 
 /* cputime */
@@ -178,6 +262,22 @@ void nullsys3(sysargs *args_ptr)
    printf("nullsys3(): process %d terminating\n", getpid());
    terminate_real(1);
 } /* nullsys3 */
+
+
+/* checkKernelMode */
+void check_kernel_mode() 
+{
+    if ((PSR_CURRENT_MODE & psr_get()) == 0) {
+        halt(1);
+    }
+} /* checkKernelMode */
+
+
+/* set_user_mode */
+void set_user_mode()
+{
+    psr_set(psr_get() & ~PSR_CURRENT_MODE);
+} /* set_user_mode */
 
 
 /* insertChild */
